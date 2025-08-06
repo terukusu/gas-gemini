@@ -1,5 +1,5 @@
 // Gemini関連のパラメータのデフォルト値
-const _DEFAULT_GEMINI_MODEL = "gemini-1.5-flash";
+const _DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const _DEFAULT_GEMINI_IMAGE_MODEL = "imagen-3.0-generate-001";
 const _DEFAULT_MAX_TOKENS = 8192;
 const _DEFAULT_TEMPERATURE = 1.0;
