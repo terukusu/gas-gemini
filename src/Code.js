@@ -205,6 +205,7 @@ class Gemini {
     const payload = {
       contents: [
         {
+          role: "user",
           parts: [
             {
               text: prompt
@@ -330,6 +331,12 @@ class Gemini {
 
       functionCallCount++;
       
+      // モデルの応答（function call含む）をcontentsに追加
+      payload.contents.push({
+        role: "model",
+        parts: parts
+      });
+      
       // Tool callがある場合の処理
       const tools = params.tools || params.functions;
       const targetTool = tools.find(tool => {
@@ -350,6 +357,7 @@ class Gemini {
 
         // Function callの結果を次のメッセージに追加
         payload.contents.push({
+          role: "user",
           parts: [{
             functionResponse: {
               name: functionCall.functionCall.name,
@@ -362,6 +370,7 @@ class Gemini {
       } catch (funcError) {
         // 関数実行エラーをAIに伝える
         payload.contents.push({
+          role: "user",
           parts: [{
             functionResponse: {
               name: functionCall.functionCall.name,
@@ -710,6 +719,7 @@ class Gemini {
     const payload = {
       contents: [
         {
+          role: "user",
           parts: [
             {
               text: prompt
