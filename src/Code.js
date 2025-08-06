@@ -1,16 +1,36 @@
 // Gemini関連のパラメータのデフォルト値
-const _DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
-const _DEFAULT_GEMINI_IMAGE_MODEL = "imagen-4";
-const _DEFAULT_MAX_TOKENS = 10000;
-const _DEFAULT_TEMPERATURE = 0.6;
+const _DEFAULT_GEMINI_MODEL = "gemini-1.5-flash";
+const _DEFAULT_GEMINI_IMAGE_MODEL = "imagen-3.0-generate-001";
+const _DEFAULT_MAX_TOKENS = 8192;
+const _DEFAULT_TEMPERATURE = 1.0;
+const _DEFAULT_TOP_P = 0.95;
+const _DEFAULT_TOP_K = 40;
 const _DEFAULT_MAX_RETRY = 5;
-const _DEFAULT_MAX_RETRY_FOR_FORMAT_AI_MESSAGE = 5;
+const _DEFAULT_CANDIDATE_COUNT = 1;
 
-// 画像生成関連のデフォルトパラメータ
-const _DEFAULT_IMAGE_N = 1;
-const _DEFAULT_IMAGE_SIZE = "1024x1024";
-const _DEFAULT_IMAGE_QUALITY = "standard";
-const _DEFAULT_IMAGE_RESPONSE_FORMAT = "url";
+// 画像生成関連のデフォルトパラメータ  
+const _DEFAULT_IMAGE_ASPECT_RATIO = "1:1";
+const _DEFAULT_IMAGE_SAFETY_FILTER_LEVEL = "block_only_high";
+
+// Gemini安全設定のデフォルト
+const _DEFAULT_SAFETY_SETTINGS = [
+  {
+    "category": "HARM_CATEGORY_HARASSMENT",
+    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+  },
+  {
+    "category": "HARM_CATEGORY_HATE_SPEECH", 
+    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+  },
+  {
+    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+  },
+  {
+    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+    "threshold": "BLOCK_MEDIUM_AND_ABOVE"
+  }
+];
 
 /**
  * Geminiクライアントオブジェクトを生成します。Google Gemini APIとの通信を管理するためのクライアントです。
@@ -57,34 +77,48 @@ class Gemini {
       throw new Error('Valid API key (non-empty string) is required');
     }
 
+    // 基本パラメータ
     this.apiKey = config.apiKey.trim();
     this.model = config.model || _DEFAULT_GEMINI_MODEL;
     this.maxTokens = config.maxTokens || _DEFAULT_MAX_TOKENS;
     this.temperature = config.temperature !== undefined ? config.temperature : _DEFAULT_TEMPERATURE;
     this.responseSchema = config.responseSchema;
     this.maxRetry = config.maxRetry || _DEFAULT_MAX_RETRY;
-    this.maxRetryForFormatAiMessage = config.maxRetryForFormatAiMessage || _DEFAULT_MAX_RETRY_FOR_FORMAT_AI_MESSAGE;
+    
+    // Gemini独自パラメータ
+    this.topP = config.topP !== undefined ? config.topP : _DEFAULT_TOP_P;
+    this.topK = config.topK !== undefined ? config.topK : _DEFAULT_TOP_K;
+    this.candidateCount = config.candidateCount || _DEFAULT_CANDIDATE_COUNT;
+    this.safetySettings = config.safetySettings || _DEFAULT_SAFETY_SETTINGS;
+    this.systemInstruction = config.systemInstruction;
 
     // 数値パラメータの検証
-    if (config.maxTokens !== undefined && (typeof config.maxTokens !== 'number' || config.maxTokens <= 0)) {
-      throw new Error('maxTokens must be a positive number');
-    }
+    this.validateNumericParam_('maxTokens', config.maxTokens, 1, 2097152);
+    this.validateNumericParam_('temperature', config.temperature, 0, 2);
+    this.validateNumericParam_('topP', config.topP, 0, 1);
+    this.validateNumericParam_('topK', config.topK, 1, 100);
+    this.validateNumericParam_('candidateCount', config.candidateCount, 1, 8);
+    this.validateNumericParam_('maxRetry', config.maxRetry, 1, 20);
 
-    if (config.temperature !== undefined && (typeof config.temperature !== 'number' || config.temperature < 0 || config.temperature > 2)) {
-      throw new Error('temperature must be a number between 0 and 2');
-    }
-
-    if (config.maxRetry !== undefined && (typeof config.maxRetry !== 'number' || config.maxRetry < 1)) {
-      throw new Error('maxRetry must be a positive integer');
-    }
-
-    if (config.maxRetryForFormatAiMessage !== undefined && (typeof config.maxRetryForFormatAiMessage !== 'number' || config.maxRetryForFormatAiMessage < 1)) {
-      throw new Error('maxRetryForFormatAiMessage must be a positive integer');
-    }
-
-    // モデル名の検証（基本的なフォーマットチェック）
+    // モデル名の検証
     if (config.model && typeof config.model !== 'string') {
       throw new Error('model must be a string');
+    }
+
+    // 安全設定の検証
+    if (config.safetySettings && !Array.isArray(config.safetySettings)) {
+      throw new Error('safetySettings must be an array');
+    }
+  }
+
+  /**
+   * 数値パラメータのバリデーション
+   */
+  validateNumericParam_(name, value, min, max) {
+    if (value !== undefined) {
+      if (typeof value !== 'number' || value < min || value > max) {
+        throw new Error(`${name} must be a number between ${min} and ${max}`);
+      }
     }
   }
 
@@ -150,12 +184,17 @@ class Gemini {
    * @param {Object} [params] - 生成オプションを含む設定オブジェクト。
    * @param {string} [params.model] - 使用するモデルの識別子。
    * @param {number} [params.maxTokens] - トークンの最大数。
-   * @param {number} [params.temperature] - モデルの温度パラメータ。
+   * @param {number} [params.temperature] - モデルの温度パラメータ（0-2）。
+   * @param {number} [params.topP] - Top-p値（0-1）。
+   * @param {number} [params.topK] - Top-k値（1-100）。
+   * @param {number} [params.candidateCount] - 生成する候補数（1-8）。
    * @param {Object} [params.responseSchema] - AIからの出力フォーマットを表すJSONスキーマ。
-   * @param {Object[]} [params.functions] - AIが必要に応じて実行する関数のオプションのリスト。
+   * @param {Object[]} [params.tools] - AIが必要に応じて実行するツールのリスト。
    * @param {Blob[]} [params.images] - 画像です。Geminiのマルチモーダル機能で処理されます。
+   * @param {Blob[]} [params.videos] - 動画です。Geminiの動画分析機能で処理されます。
+   * @param {Array} [params.safetySettings] - 安全設定の配列。
+   * @param {string} [params.systemInstruction] - システム指示。
    * @param {number} [params.maxRetry] - 最大リトライ回数。
-   * @param {number} [params.maxRetryForFormatAiMessage=5] - responseSchema指定時にレスポンスJSON化の最大リトライ回数。   
    * @return {Object} Gemini APIからのレスポンスJSONをパースしたオブジェクト
    */
   generateContent(prompt, params={}) {
@@ -171,54 +210,58 @@ class Gemini {
       ]
     };
 
-    // 生成設定
-    const generationConfig = {};
-    
-    // 都度上書き可能なパラメーター
-    const temperature = params.temperature || this.temperature;
-    const maxTokens = params.maxTokens || this.maxTokens;
-    
-    if (temperature !== undefined) {
-      generationConfig.temperature = temperature;
-    }
-    if (maxTokens !== undefined) {
-      generationConfig.maxOutputTokens = maxTokens;
+    // システム指示の設定
+    const systemInstruction = params.systemInstruction || this.systemInstruction;
+    if (systemInstruction) {
+      payload.systemInstruction = {
+        parts: [{ text: systemInstruction }]
+      };
     }
 
-    // JSONスキーマが指定されていれば構造化出力を設定
-    const responseSchema = params.responseSchema || this.responseSchema;
-    
-    if (responseSchema) {
-      generationConfig.responseMimeType = "application/json";
-      generationConfig.responseSchema = this.sanitizeSchemaForGemini_(responseSchema);
+    // 生成設定の構築
+    const generationConfig = this.buildGenerationConfig_(params);
+    if (Object.keys(generationConfig).length > 0) {
+      payload.generationConfig = generationConfig;
     }
 
-    payload.generationConfig = generationConfig;
+    // 安全設定
+    const safetySettings = params.safetySettings || this.safetySettings;
+    if (safetySettings && safetySettings.length > 0) {
+      payload.safetySettings = safetySettings;
+    }
 
-    // Function Callingの設定
-    if (params.functions) {
+    // Tool Use（Function Calling）の設定
+    if (params.tools || params.functions) {
+      // functionsパラメータは下位互換のため残す
+      const tools = params.tools || params.functions;
       payload.tools = [{
-        functionDeclarations: params.functions.map(f => ({
-          name: f.func.name,
-          description: f.description,
-          parameters: f.parameters
-        }))
+        functionDeclarations: tools.map(tool => {
+          // 新形式（tool.name, tool.description）または旧形式（tool.func.name）に対応
+          return {
+            name: tool.name || tool.func.name,
+            description: tool.description,
+            parameters: tool.parameters
+          };
+        })
       }];
     }
 
-    // 画像が指定されていれば画像もGeminiへ渡す
-    const images = params.images || this.images;
+    // メディアファイル（画像・動画）の処理
+    const mediaFiles = [];
+    if (params.images) mediaFiles.push(...params.images);
+    if (params.videos) mediaFiles.push(...params.videos);
+    if (this.images) mediaFiles.push(...this.images);
 
-    if (images) {
-      images.forEach(imageBlob => {
-        const mimeType = imageBlob.getContentType();
-        const imageBytes = imageBlob.getBytes();
-        const imageB64 = Utilities.base64Encode(imageBytes);
+    if (mediaFiles.length > 0) {
+      mediaFiles.forEach(mediaBlob => {
+        const mimeType = mediaBlob.getContentType();
+        const mediaBytes = mediaBlob.getBytes();
+        const mediaB64 = Utilities.base64Encode(mediaBytes);
 
         payload.contents[0].parts.push({
           inlineData: {
             mimeType: mimeType,
-            data: imageB64
+            data: mediaB64
           }
         });
       });
@@ -267,15 +310,22 @@ class Gemini {
 
       functionCallCount++;
       
-      // Function callがある場合の処理
-      const targetFunction = params.functions.find(x => x.func.name === functionCall.functionCall.name);
-      if (!targetFunction) {
-        throw new Error("未知の関数が呼び出されました: " + functionCall.functionCall.name);
+      // Tool callがある場合の処理
+      const tools = params.tools || params.functions;
+      const targetTool = tools.find(tool => {
+        const toolName = tool.name || tool.func.name;
+        return toolName === functionCall.functionCall.name;
+      });
+      
+      if (!targetTool) {
+        throw new Error("未知のツールが呼び出されました: " + functionCall.functionCall.name);
       }
 
       try {
         const funcArgs = functionCall.functionCall.args;
-        const funcResult = targetFunction.func(funcArgs);
+        // 新形式（tool.execute）または旧形式（tool.func）に対応
+        const executeFunc = targetTool.execute || targetTool.func;
+        const funcResult = executeFunc(funcArgs);
         const funcResultJson = JSON.stringify(funcResult);
 
         // Function callの結果を次のメッセージに追加
@@ -696,6 +746,35 @@ class Gemini {
    */
   getBatchEmbeddingUrl_(params={}) {
     return `https://generativelanguage.googleapis.com/v1beta/models:batchEmbedContents`;
+  }
+
+  /**
+   * 生成設定を構築します
+   */
+  buildGenerationConfig_(params) {
+    const config = {};
+    
+    // 基本パラメータ
+    const temperature = params.temperature !== undefined ? params.temperature : this.temperature;
+    const maxTokens = params.maxTokens !== undefined ? params.maxTokens : this.maxTokens;
+    const topP = params.topP !== undefined ? params.topP : this.topP;
+    const topK = params.topK !== undefined ? params.topK : this.topK;
+    const candidateCount = params.candidateCount !== undefined ? params.candidateCount : this.candidateCount;
+    
+    if (temperature !== undefined) config.temperature = temperature;
+    if (maxTokens !== undefined) config.maxOutputTokens = maxTokens;
+    if (topP !== undefined) config.topP = topP;
+    if (topK !== undefined) config.topK = topK;
+    if (candidateCount !== undefined) config.candidateCount = candidateCount;
+
+    // 構造化出力の設定
+    const responseSchema = params.responseSchema || this.responseSchema;
+    if (responseSchema) {
+      config.responseMimeType = "application/json";
+      config.responseSchema = this.sanitizeSchemaForGemini_(responseSchema);
+    }
+    
+    return config;
   }
 
   /**
