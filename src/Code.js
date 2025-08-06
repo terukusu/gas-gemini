@@ -151,7 +151,20 @@ class Gemini {
     }
 
     // Function Callingの結果処理
-    if (result.candidates && result.candidates[0].content.parts) {
+    if (result.candidates && result.candidates[0] && result.candidates[0].content) {
+      // partsが存在しない場合のエラーハンドリング
+      if (!result.candidates[0].content.parts || result.candidates[0].content.parts.length === 0) {
+        // finishReasonをチェック
+        const finishReason = result.candidates[0].finishReason;
+        if (finishReason === "MAX_TOKENS") {
+          throw new Error("レスポンスがトークン上限に達しました。maxTokensを増やしてください。現在の設定: " + (params.maxTokens || this.maxTokens));
+        } else if (finishReason === "SAFETY") {
+          throw new Error("コンテンツが安全性フィルターによってブロックされました。");
+        } else {
+          throw new Error("予期しないレスポンス形式です: " + JSON.stringify(result));
+        }
+      }
+      
       const parts = result.candidates[0].content.parts;
       
       // Function callがある場合の処理
