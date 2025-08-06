@@ -91,6 +91,10 @@ class Gemini {
     this.candidateCount = config.candidateCount || _DEFAULT_CANDIDATE_COUNT;
     this.safetySettings = config.safetySettings || _DEFAULT_SAFETY_SETTINGS;
     this.systemInstruction = config.systemInstruction;
+    
+    // その他のプロパティ
+    this.images = config.images || [];
+    this.maxRetryForFormatAiMessage = config.maxRetryForFormatAiMessage || _DEFAULT_MAX_RETRY;
 
     // 数値パラメータの検証
     this.validateNumericParam_('maxTokens', config.maxTokens, 1, 2097152);
@@ -254,16 +258,29 @@ class Gemini {
 
     if (mediaFiles.length > 0) {
       mediaFiles.forEach(mediaBlob => {
-        const mimeType = mediaBlob.getContentType();
-        const mediaBytes = mediaBlob.getBytes();
-        const mediaB64 = Utilities.base64Encode(mediaBytes);
+        // メディアファイルの基本検証
+        if (!mediaBlob || typeof mediaBlob.getContentType !== 'function') {
+          throw new Error('Invalid media file: must be a valid Blob object');
+        }
 
-        payload.contents[0].parts.push({
-          inlineData: {
-            mimeType: mimeType,
-            data: mediaB64
-          }
-        });
+        const mimeType = mediaBlob.getContentType();
+        if (!mimeType) {
+          throw new Error('Media file must have a valid MIME type');
+        }
+
+        try {
+          const mediaBytes = mediaBlob.getBytes();
+          const mediaB64 = Utilities.base64Encode(mediaBytes);
+
+          payload.contents[0].parts.push({
+            inlineData: {
+              mimeType: mimeType,
+              data: mediaB64
+            }
+          });
+        } catch (error) {
+          throw new Error(`Failed to process media file: ${error.message}`);
+        }
       });
     }
 
@@ -271,6 +288,9 @@ class Gemini {
 
     let retryForFormatAiMessage = 0;
     const maxRetryForFormatAiMessage = params.maxRetryForFormatAiMessage || this.maxRetryForFormatAiMessage;
+
+    // レスポンススキーマの取得（ループ内で参照するため事前に取得）
+    const responseSchema = params.responseSchema || this.responseSchema;
 
     // Function Callingの処理ループ（無限ループを防ぐため最大試行回数を設定）
     const MAX_FUNCTION_CALLS = 10;
