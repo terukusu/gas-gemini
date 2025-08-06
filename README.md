@@ -8,7 +8,7 @@
 - JSON出力・・OK！
 - 画像分析・・OK！
 - 画像生成・・OK！（Gemini 2.0）
-- **動画分析・・OK！**（Gemini独自機能）
+- **動画分析・・OK！**
 - 関数呼び出しによる前提知識補完・・OK！
 - エンベディング・・・OK！
 - Google Gemini API に対応
@@ -273,7 +273,7 @@ Logger.log("Generated image data:", result.candidates[0].content.parts[0].inline
 | 音声文字起こし | ✅ Whisper | ❌ | Geminiは非対応 |
 | Function Calling | ✅ | ✅ | Tool Use として実装 |
 | エンベディング | ✅ | ✅ | バッチ処理対応 |
-| 動画分析 | ❌ | ✅ | **Gemini独自の新機能** |
+| 動画分析 | ❌ | ✅ | Gemini APIの機能 |
 
 ## モデル一覧
 
