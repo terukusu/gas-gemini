@@ -190,7 +190,7 @@ class Gemini {
     
     if (responseSchema) {
       generationConfig.responseMimeType = "application/json";
-      generationConfig.responseSchema = responseSchema;
+      generationConfig.responseSchema = this.sanitizeSchemaForGemini_(responseSchema);
     }
 
     payload.generationConfig = generationConfig;
@@ -696,6 +696,38 @@ class Gemini {
    */
   getBatchEmbeddingUrl_(params={}) {
     return `https://generativelanguage.googleapis.com/v1beta/models:batchEmbedContents`;
+  }
+
+  /**
+   * JSONスキーマをGemini API用にサニタイズします
+   * GeminiはOpenAIと異なり、$schemaやadditionalPropertiesをサポートしていません
+   */
+  sanitizeSchemaForGemini_(schema) {
+    if (!schema || typeof schema !== 'object') {
+      return schema;
+    }
+
+    const sanitized = JSON.parse(JSON.stringify(schema));
+    
+    // Geminiでサポートされていないプロパティを除去
+    const unsupportedProps = ['$schema', 'additionalProperties', '$id', '$ref', 'definitions'];
+    
+    const cleanSchema = (obj) => {
+      if (Array.isArray(obj)) {
+        return obj.map(cleanSchema);
+      } else if (obj && typeof obj === 'object') {
+        const cleaned = {};
+        for (const [key, value] of Object.entries(obj)) {
+          if (!unsupportedProps.includes(key)) {
+            cleaned[key] = cleanSchema(value);
+          }
+        }
+        return cleaned;
+      }
+      return obj;
+    };
+    
+    return cleanSchema(sanitized);
   }
 
   /**

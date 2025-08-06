@@ -34,7 +34,6 @@ const response = client.simpleChat("こんにちは!");
 ```JavaScript
   // ==== AIの回答をJSONで受け取る例 ====
   const responseSchemaHuman = {
-    "title": "Human",
     "type": "object",
     "properties": {
       "name": {
@@ -63,7 +62,7 @@ const response = client.simpleChat("こんにちは!");
   //
 ```
 
-JSONスキーマは、受け取りたいJSONっぽい雰囲気のものを書いて、以下のようにChatGPTにJSONスキーマにしてもらえばOK。  
+JSONスキーマは、受け取りたいJSONっぽい雰囲気のものを書いて、ChatGPTにJSONスキーマにしてもらえばOK。ただし、Geminiでは`$schema`や`additionalProperties`は自動的に除去されます。
 
 # AIの前提知識を関数呼び出しで補完する例
 ```JavaScript
