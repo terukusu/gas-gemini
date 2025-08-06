@@ -562,29 +562,33 @@ class Gemini {
       throw new Error("API エラー: " + JSON.stringify(result.error));
     }
 
-    // レスポンス形式に応じて画像データを抽出
-    // Imagen 3.0レスポンス形式
-    if (result.predictions && result.predictions[0]) {
-      const prediction = result.predictions[0];
-      if (prediction.bytesBase64Encoded) {
-        return `data:image/png;base64,${prediction.bytesBase64Encoded}`;
-      }
-    }
+    // 使用モデルを特定してレスポンス処理
+    const model = params.model || _DEFAULT_GEMINI_IMAGE_MODEL;
     
-    // Gemini 2.0レスポンス形式
-    if (result.candidates && result.candidates[0] && result.candidates[0].content && result.candidates[0].content.parts) {
-      const parts = result.candidates[0].content.parts;
-      const imagePart = parts.find(part => part.inlineData);
-      
-      if (imagePart && imagePart.inlineData) {
-        // base64データをdata URIとして返す
-        const mimeType = imagePart.inlineData.mimeType || 'image/jpeg';
-        const base64Data = imagePart.inlineData.data;
-        return `data:${mimeType};base64,${base64Data}`;
+    if (model.includes("imagen")) {
+      // Imagen 3.0レスポンス形式
+      if (result.predictions && result.predictions[0]) {
+        const prediction = result.predictions[0];
+        if (prediction.bytesBase64Encoded) {
+          return `data:image/png;base64,${prediction.bytesBase64Encoded}`;
+        }
       }
+      throw new Error("Imagen 3.0: 画像データが見つかりません: " + JSON.stringify(result));
+    } else {
+      // Gemini 2.0レスポンス形式
+      if (result.candidates && result.candidates[0] && result.candidates[0].content && result.candidates[0].content.parts) {
+        const parts = result.candidates[0].content.parts;
+        const imagePart = parts.find(part => part.inlineData);
+        
+        if (imagePart && imagePart.inlineData) {
+          // base64データをdata URIとして返す
+          const mimeType = imagePart.inlineData.mimeType || 'image/jpeg';
+          const base64Data = imagePart.inlineData.data;
+          return `data:${mimeType};base64,${base64Data}`;
+        }
+      }
+      throw new Error("Gemini 2.0: 画像データが見つかりません: " + JSON.stringify(result));
     }
-
-    throw new Error("画像生成に失敗しました: " + JSON.stringify(result));
   }
 
   /**
@@ -616,6 +620,11 @@ class Gemini {
       const parameters = {};
       
       if (params.aspectRatio) {
+        // aspectRatioの値検証
+        const validRatios = ["1:1", "9:16", "16:9", "4:3", "3:4"];
+        if (!validRatios.includes(params.aspectRatio)) {
+          throw new Error(`Invalid aspectRatio: ${params.aspectRatio}. Valid values: ${validRatios.join(", ")}`);
+        }
         parameters.aspectRatio = params.aspectRatio;
       }
       
@@ -813,7 +822,14 @@ class Gemini {
    */
   getImageGenerationUrl_(params={}) {
     const model = params.model || _DEFAULT_GEMINI_IMAGE_MODEL;
-    return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    
+    if (model.includes("imagen")) {
+      // Imagen 3.0用のエンドポイント
+      return `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
+    } else {
+      // Gemini 2.0用のエンドポイント
+      return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    }
   }
 
   /**
