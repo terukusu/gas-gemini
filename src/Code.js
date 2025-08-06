@@ -1,6 +1,6 @@
 // Gemini関連のパラメータのデフォルト値
 const _DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
-const _DEFAULT_GEMINI_IMAGE_MODEL = "gemini-2.0-flash-preview-image-generation";
+const _DEFAULT_GEMINI_IMAGE_MODEL = "imagen-3.0-generate-001";
 const _DEFAULT_MAX_TOKENS = 8192;
 const _DEFAULT_TEMPERATURE = 1.0;
 const _DEFAULT_TOP_P = 0.95;
@@ -562,8 +562,17 @@ class Gemini {
       throw new Error("API エラー: " + JSON.stringify(result.error));
     }
 
-    // Geminiの画像生成レスポンスから画像URLを抽出
-    if (result.candidates && result.candidates[0].content.parts) {
+    // レスポンス形式に応じて画像データを抽出
+    // Imagen 3.0レスポンス形式
+    if (result.predictions && result.predictions[0]) {
+      const prediction = result.predictions[0];
+      if (prediction.bytesBase64Encoded) {
+        return `data:image/png;base64,${prediction.bytesBase64Encoded}`;
+      }
+    }
+    
+    // Gemini 2.0レスポンス形式
+    if (result.candidates && result.candidates[0] && result.candidates[0].content && result.candidates[0].content.parts) {
       const parts = result.candidates[0].content.parts;
       const imagePart = parts.find(part => part.inlineData);
       
@@ -590,28 +599,63 @@ class Gemini {
    * @return {Object} Gemini APIからのレスポンス全体
    */
   imageGeneration(prompt, params={}) {
-    const payload = {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: prompt
-            }
-          ]
-        }
-      ]
-    };
+    // 使用モデルに応じて構造を切り替え
+    const model = params.model || _DEFAULT_GEMINI_IMAGE_MODEL;
+    
+    if (model.includes("imagen")) {
+      // Imagen 3.0 API構造
+      const payload = {
+        instances: [
+          {
+            prompt: prompt
+          }
+        ]
+      };
 
-    // Gemini 2.0の画像生成設定
-    const generationConfig = {
-      responseModalities: ["TEXT", "IMAGE"]
-    };
+      // parametersオブジェクト
+      const parameters = {};
+      
+      if (params.aspectRatio) {
+        parameters.aspectRatio = params.aspectRatio;
+      }
+      
+      if (params.sampleCount) {
+        parameters.sampleCount = params.sampleCount;
+      } else {
+        parameters.sampleCount = 1; // デフォルト
+      }
 
-    payload.generationConfig = generationConfig;
+      if (Object.keys(parameters).length > 0) {
+        payload.parameters = parameters;
+      }
 
-    const url = this.getImageGenerationUrl_(params);
-    return this.callApi_(url, payload, params.maxRetry);
+      const url = this.getImageGenerationUrl_(params);
+      return this.callApi_(url, payload, params.maxRetry);
+      
+    } else {
+      // Gemini 2.0 API構造
+      const payload = {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: prompt
+              }
+            ]
+          }
+        ]
+      };
+
+      const generationConfig = {
+        responseModalities: ["TEXT", "IMAGE"]
+      };
+
+      payload.generationConfig = generationConfig;
+
+      const url = this.getImageGenerationUrl_(params);
+      return this.callApi_(url, payload, params.maxRetry);
+    }
   }
 
   /**
