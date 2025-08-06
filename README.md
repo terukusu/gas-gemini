@@ -262,9 +262,9 @@ Logger.log("Generated image data:", result.candidates[0].content.parts[0].inline
 // 詳細なAPIレスポンス情報が取得可能
 ```
 
-## OpenAI版との機能比較
+## [OpenAI版](https://github.com/terukusu/gas-openai)との機能比較
 
-| 機能 | OpenAI版 | Gemini版 | 備考 |
+| 機能 | [OpenAI版](https://github.com/terukusu/gas-openai) | Gemini版 | 備考 |
 |------|----------|----------|------|
 | テキスト生成 | ✅ | ✅ | 同じインターフェース |
 | JSON出力 | ✅ | ✅ | 同じインターフェース |
