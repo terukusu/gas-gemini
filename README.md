@@ -7,7 +7,7 @@
 - テキストを生成・・OK！
 - JSON出力・・OK！
 - 画像分析・・OK！
-- 画像生成・・OK！（Imagen4）
+- 画像生成・・OK！（Gemini 2.0）
 - **動画分析・・OK！**（Gemini独自機能）
 - 関数呼び出しによる前提知識補完・・OK！
 - エンベディング・・・OK！
@@ -15,17 +15,17 @@
 - デフォルトでも動くけど、パラメータで柔軟にカスタマイズも可能(モデル名とか)
 
 # 使い方
-- [src/Gemini.js](src/Gemini.js) の内容を何処かのGASへ保存
+- [src/Code.js](src/Code.js) の内容を何処かのGASへ保存
 - 使いたいGASへライブラリとして追加する
     - スクリプトエディタの左メニューの「ライブラリ ＋」の ＋ をクリックして、↑のスクリプトIDを指定
-- 詳しい使い方は、[src/Gemini.js](src/Gemini.js) や↓のサンプルを斜め読みしてください
+- 詳しい使い方は、[src/Code.js](src/Code.js) や↓のサンプルを斜め読みしてください
 
 # シンプルなコードの例
 ```JavaScript
 // 基本的な使用例
 const client = createGeminiClient({
   apiKey: '<YOUR_API_KEY>',
-  model: 'gemini-1.5-flash',
+  model: 'gemini-2.5-flash',
   temperature: 0.7,
   topP: 0.95,
   topK: 40
@@ -125,7 +125,7 @@ JSONスキーマは、受け取りたいJSONっぽい雰囲気のものを書い
   const myImage = DriveApp.getFileById("1KRr_7CdjYklHwSvL7EfRfp0EiStgxTIq");
 
   const result = client.simpleChat("この画像を詳しく解説してください。", {
-    model: "gemini-1.5-flash", // マルチモーダル対応モデル
+    model: "gemini-2.5-flash", // マルチモーダル対応モデル
     images: [myImage.getBlob()],
     temperature: 0.4,  // 画像分析は低温度推奨
     maxTokens: 1000
@@ -143,7 +143,7 @@ JSONスキーマは、受け取りたいJSONっぽい雰囲気のものを書い
   const myVideo = DriveApp.getFileById("1nPivg4JwHhrE4Qax1du2CM2P5uIIY9Py");
 
   const result = client.simpleChat("この動画で何が起こっていますか？要約してください。", {
-    model: "gemini-1.5-flash", // 動画分析対応モデル
+    model: "gemini-2.5-flash", // 動画分析対応モデル
     videos: [myVideo.getBlob()],
     temperature: 0.3,
     maxTokens: 2000,
@@ -164,7 +164,7 @@ JSONスキーマは、受け取りたいJSONっぽい雰囲気のものを書い
 # AIで画像を生成する例
 ```JavaScript
   params = {
-    model: "imagen-4", // 画像生成を使うときはこのモデルを指定
+    model: "gemini-2.0-flash-preview-image-generation", // 画像生成を使うときはこのモデルを指定
     aspectRatio: "1:1" // アスペクト比を指定（Gemini独自）
   };
 
@@ -176,21 +176,6 @@ JSONスキーマは、受け取りたいJSONっぽい雰囲気のものを書い
   //
 ```
 
-# 動画をAIで分析する例（Gemini独自機能）
-```JavaScript
-  // ==== Drive上の動画を分析する例 ====
-  const myVideo = DriveApp.getFileById("1nPivg4JwHhrE4Qax1du2CM2P5uIIY9Py");
-
-  params = {
-    model: "gemini-2.5-flash" // 動画分析対応モデル
-  };
-
-  result = client.simpleVideoAnalysis(myVideo.getBlob(), "この動画で何が起こっていますか？", params);
-  Logger.log(result);
-  // 出力例：
-  // この動画では、公園で子供たちがサッカーをして遊んでいる様子が映されています。青空の下で楽しそうに走り回る子供たちの笑顔が印象的です。
-  //
-```
 
 # エンベディング（文字列のベクトル表現化）をする例
 ```JavaScript
@@ -231,6 +216,52 @@ JSONスキーマは、受け取りたいJSONっぽい雰囲気のものを書い
   // ]
 ```
 
+# 詳細レスポンス取得の例
+```JavaScript
+// generateContent()メソッドで詳細なAPIレスポンスを取得
+const result = client.generateContent("宇宙について教えて", {
+  temperature: 0.5,
+  maxTokens: 2000
+});
+
+Logger.log("Generated text:", result.candidates[0].content.parts[0].text);
+Logger.log("Usage info:", result.usageMetadata);
+// 出力例：
+// Generated text: 宇宙は約138億年前のビッグバンによって誕生したとされています...
+// Usage info: {promptTokenCount: 12, candidatesTokenCount: 456, totalTokenCount: 468}
+```
+
+# 動画分析専用メソッドの例
+```JavaScript
+// simpleVideoAnalysis()メソッドで簡単な動画分析
+const myVideo = DriveApp.getFileById("VIDEO_FILE_ID");
+
+const result = client.simpleVideoAnalysis(
+  myVideo.getBlob(), 
+  "この動画で何が起こっていますか？要約してください。", 
+  {
+    model: "gemini-2.5-flash",
+    temperature: 0.3,
+    maxTokens: 2000
+  }
+);
+
+Logger.log(result);
+// 出力例：この動画では、公園で子供たちがサッカーをして遊んでいる様子が映されています...
+```
+
+# 詳細画像生成の例
+```JavaScript
+// imageGeneration()メソッドで詳細なレスポンスを取得
+const result = client.imageGeneration("美しい夕日の風景", {
+  model: "gemini-2.0-flash-preview-image-generation",
+  aspectRatio: "16:9"
+});
+
+Logger.log("Generated image data:", result.candidates[0].content.parts[0].inlineData);
+// 詳細なAPIレスポンス情報が取得可能
+```
+
 ## OpenAI版との機能比較
 
 | 機能 | OpenAI版 | Gemini版 | 備考 |
@@ -238,7 +269,7 @@ JSONスキーマは、受け取りたいJSONっぽい雰囲気のものを書い
 | テキスト生成 | ✅ | ✅ | 同じインターフェース |
 | JSON出力 | ✅ | ✅ | 同じインターフェース |
 | 画像分析 | ✅ | ✅ | 同じインターフェース |
-| 画像生成 | ✅ DALL-E | ✅ Imagen4 | Geminiの方が高品質 |
+| 画像生成 | ✅ DALL-E | ✅ Gemini 2.0 | Geminiの方が高品質 |
 | 音声文字起こし | ✅ Whisper | ❌ | Geminiは非対応 |
 | Function Calling | ✅ | ✅ | Tool Use として実装 |
 | エンベディング | ✅ | ✅ | バッチ処理対応 |
@@ -252,7 +283,7 @@ JSONスキーマは、受け取りたいJSONっぽい雰囲気のものを書い
 - `gemini-2.0-flash` - 安定版モデル
 
 ### 画像生成
-- `imagen-4` (デフォルト) - 最新の画像生成モデル
+- `gemini-2.0-flash-preview-image-generation` (デフォルト) - Gemini 2.0の画像生成モデル
 
 ### エンベディング
 - `text-embedding-004` (デフォルト) - 最新のエンベディングモデル
