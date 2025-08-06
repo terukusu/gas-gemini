@@ -844,7 +844,8 @@ class Gemini {
    * バッチエンベディング用のURLを取得します
    */
   getBatchEmbeddingUrl_(params={}) {
-    return `https://generativelanguage.googleapis.com/v1beta/models:batchEmbedContents`;
+    const model = params.model || "text-embedding-004";
+    return `https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents`;
   }
 
   /**
