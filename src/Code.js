@@ -5,7 +5,7 @@ const _DEFAULT_MAX_TOKENS = 8192;
 const _DEFAULT_TEMPERATURE = 1.0;
 const _DEFAULT_TOP_P = 0.95;
 const _DEFAULT_TOP_K = 40;
-const _DEFAULT_MAX_RETRY = 5;
+const _DEFAULT_MAX_RETRY = 3;
 const _DEFAULT_CANDIDATE_COUNT = 1;
 
 // 画像生成関連のデフォルトパラメータ  
@@ -58,8 +58,8 @@ const _DEFAULT_SAFETY_SETTINGS = [
  * @param {Function} config.functions[].func - 必要に応じて実行する関数。
  * @param {string} config.functions[].description - 関数の説明。
  * @param {Object} config.functions[].parameters - 関数の引数を定義するJSONスキーマ。
- * @param {number} [config.maxRetry=5] - 最大リトライ回数。省略可能で、デフォルトは5です。
- * @param {number} [config.maxRetryForFormatAiMessage=5] - responseSchema指定時にレスポンスJSON化の最大リトライ回数。省略可能で、デフォルトは5です。
+ * @param {number} [config.maxRetry=3] - 最大リトライ回数。省略可能で、デフォルトは3です。
+ * @param {number} [config.maxRetryForFormatAiMessage=3] - responseSchema指定時にレスポンスJSON化の最大リトライ回数。省略可能で、デフォルトは3です。
  */
 function createGeminiClient(config) {
   return new Gemini(config);
@@ -140,7 +140,7 @@ class Gemini {
    * @param {Object} [params.responseSchema] - AIからの出力フォーマットを表すJSONスキーマ。
    * @param {Object[]} [params.functions] - AIが必要に応じて実行する関数のオプションのリスト。
    * @param {number} [params.maxRetry] - 最大リトライ回数。
-   * @param {number} [params.maxRetryForFormatAiMessage=5] - responseSchema指定時にレスポンスJSON化の最大リトライ回数。
+   * @param {number} [params.maxRetryForFormatAiMessage=3] - responseSchema指定時にレスポンスJSON化の最大リトライ回数。
    * @return {Object|string} params.responseSchema を指定していればその型のオブジェクト、そうでなければテキスト
    * @throws {Error} Gemini APIレイヤでのエラーが発生した場合に例外をスローします。
    */
