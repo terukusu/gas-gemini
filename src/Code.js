@@ -487,7 +487,7 @@ class Gemini {
    */
   requestWithRetry_(url, options, maxRetry=this.maxRetry) {
     let lastError = null;
-    
+
     for (let attempts = 0; attempts < maxRetry; attempts++) {
       let response = null;
       try {
@@ -499,11 +499,18 @@ class Gemini {
         // リトライ条件
         const httpStatus = response.getResponseCode();
         if (httpStatus == 429) {
-          const headers = response.getHeaders();
-          const retryAfter = this.getDictValue_('retry-after', headers) || this.getDictValue_('x-ratelimit-reset-tokens', headers);
-          if (retryAfter && attempts < maxRetry - 1) {
-            Logger.log(`Rate limit exceeded. Retry after ${retryAfter} seconds.`);
-            Utilities.sleep(retryAfter * 1000);
+          if (attempts < maxRetry - 1) {
+            // レスポンスボディからretryDelayを取得
+            const retryDelay = this.extractRetryDelay_(content);
+            if (retryDelay) {
+              Logger.log(`Rate limit exceeded. Retry after ${retryDelay} seconds.`);
+              Utilities.sleep(retryDelay * 1000);
+            } else {
+              // retryDelayが取得できない場合は指数バックオフ
+              const backoffDelay = Math.min(1000 * Math.pow(2, attempts), 60000);
+              Logger.log(`Rate limit exceeded. Backoff for ${backoffDelay}ms.`);
+              Utilities.sleep(backoffDelay);
+            }
             continue;
           }
         } else if (httpStatus != 200) {
@@ -516,7 +523,7 @@ class Gemini {
         lastError = e;
         const message = e.toString();
         Logger.log(`Attempt ${attempts + 1} failed: ${message}`);
-        
+
         // 最後の試行でない場合、指数バックオフでリトライ
         if (attempts < maxRetry - 1) {
           const backoffDelay = Math.min(1000 * Math.pow(2, attempts), 30000);
@@ -527,6 +534,32 @@ class Gemini {
 
     // リトライが最大回数に達した
     throw new Error(`APIエラー: リトライが最大回数に達しました（${maxRetry}回）: ${lastError ? lastError.message : 'Unknown error'}`);
+  }
+
+  /**
+   * 429エラーレスポンスからretryDelayを抽出します
+   * @param {string} content - レスポンスボディ
+   * @return {number|null} リトライまでの秒数、取得できない場合はnull
+   */
+  extractRetryDelay_(content) {
+    try {
+      const json = JSON.parse(content);
+      if (json.error && json.error.details) {
+        const retryInfo = json.error.details.find(
+          detail => detail['@type'] === 'type.googleapis.com/google.rpc.RetryInfo'
+        );
+        if (retryInfo && retryInfo.retryDelay) {
+          // "47s" -> 47 の形式で秒数を抽出
+          const match = retryInfo.retryDelay.match(/^(\d+)/);
+          if (match) {
+            return parseInt(match[1], 10);
+          }
+        }
+      }
+    } catch (e) {
+      Logger.log('Failed to extract retryDelay: ' + e.toString());
+    }
+    return null;
   }
 
   /**
