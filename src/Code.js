@@ -871,7 +871,7 @@ class Gemini {
     const responseSchema = params.responseSchema || this.responseSchema;
     if (responseSchema) {
       config.responseMimeType = "application/json";
-      config.responseSchema = this.sanitizeSchemaForGemini_(responseSchema);
+      config.responseJsonSchema = this.sanitizeSchemaForGemini_(responseSchema);
     }
     
     return config;
