@@ -185,6 +185,15 @@ class Gemini {
       // 通常のテキストレスポンス
       const textPart = parts.find(part => part.text);
       if (textPart) {
+        // responseSchemaが指定されている場合はJSONパースしてオブジェクトを返す
+        const responseSchema = params.responseSchema || this.responseSchema;
+        if (responseSchema) {
+          try {
+            return JSON.parse(textPart.text);
+          } catch (e) {
+            throw new Error("JSONパースに失敗しました。レスポンス: " + textPart.text + ", エラー: " + e.toString());
+          }
+        }
         return textPart.text;
       }
     }
